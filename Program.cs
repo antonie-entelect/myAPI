@@ -1,3 +1,5 @@
+using Microsoft.Azure.Cosmos;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -21,7 +23,7 @@ var summaries = new[]
     "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
 };
 
-app.MapGet("/weatherforecast", () =>
+app.MapGet("/weatherforecast", async (bool? persist) =>
 {
     var forecast =  Enumerable.Range(1, 5).Select(index =>
         new WeatherForecast
@@ -31,6 +33,21 @@ app.MapGet("/weatherforecast", () =>
             summaries[Random.Shared.Next(summaries.Length)]
         ))
         .ToArray();
+    if (persist == true)
+    {
+        var accountEndpoint = app.Configuration.GetValue<string>("accountEndpoint");
+        var authKeyOrResourceToken = app.Configuration.GetValue<string>("authKeyOrResourceToken");
+        var databaseId = app.Configuration.GetValue<string>("databaseId");
+        var containerId = app.Configuration.GetValue<string>("containerId");
+
+        var client = new CosmosClient(accountEndpoint, authKeyOrResourceToken);
+        var database = client.GetDatabase(databaseId);
+        var container = database.GetContainer(containerId);
+        foreach (var item in forecast)
+        {
+            await container.CreateItemAsync(item);
+        }
+    }
     return forecast;
 })
 .WithName("GetWeatherForecast")
@@ -38,7 +55,8 @@ app.MapGet("/weatherforecast", () =>
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+record WeatherForecast(DateOnly date, int temperatureC, string? summary)
 {
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    public Guid id => Guid.NewGuid();
+    public int temperatureF => 32 + (int)(temperatureC / 0.5556);
 }
